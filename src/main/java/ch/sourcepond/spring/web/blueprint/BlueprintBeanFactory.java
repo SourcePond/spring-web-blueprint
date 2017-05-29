@@ -46,6 +46,11 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
     static final String BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN = "BlueprintContainer container has been shutdown";
 
     /**
+     * Aliases are currently not supported by the Blueprint specification.
+     */
+    static final String[] EMPTY_ALIASES = new String[0];
+
+    /**
      * Service property name of the corresponding WABs symbolic-name. This
      * property is necessary in order to retrieve the WABs
      * {@link BlueprintContainer} through the OSGi service registry. See OSGi
@@ -266,8 +271,8 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
     @Override
     public Class<?> getType(final String s) throws NoSuchBeanDefinitionException {
         try {
-            return loadClassFromBundle(findMetadata(s));
-        } catch (final NoSuchMethodException e) {
+            return findType(findMetadata(s));
+        } catch (final ClassNotFoundException | NoSuchMethodException e) {
             final NoSuchBeanDefinitionException ex = new NoSuchBeanDefinitionException(s);
             ex.initCause(e);
             throw ex;
@@ -295,37 +300,35 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
         }
     }
 
-    private String getComponentId(final Target pTarget) {
+    private String getComponentId(final Target target) {
         final String componentId;
-        if (pTarget instanceof ComponentMetadata) {
-            componentId = ((ComponentMetadata) pTarget).getId();
+        if (target instanceof ComponentMetadata) {
+            componentId = ((ComponentMetadata) target).getId();
         } else { // It can only be a RefMetadata
-            componentId = ((RefMetadata) pTarget).getComponentId();
+            componentId = ((RefMetadata) target).getComponentId();
         }
         return componentId;
     }
 
-    private Class<?> loadClassFromBundle(final ComponentMetadata pBeanMetadata) throws NoSuchMethodException {
-        assert pBeanMetadata != null : "pBeanMetadata cannot be null";
+    private Class<?> findType(final ComponentMetadata metadata) throws ClassNotFoundException, NoSuchMethodException {
+        assert metadata != null : "metadata cannot be null";
 
         Class<?> clazz = null;
 
-        if (pBeanMetadata instanceof BeanMetadata) {
-            final BeanMetadata beanMetadata = (BeanMetadata) pBeanMetadata;
+        if (metadata instanceof BeanMetadata) {
+            final BeanMetadata beanMetadata = (BeanMetadata) metadata;
             final String factoryMethodNameOrNull = beanMetadata
                     .getFactoryMethod();
-            // Class name can be null when a factory component was used to
-            // construct
-            // the bean.
-            if (beanMetadata.getClassName() == null) {
+            final String className = beanMetadata.getClassName();
 
-                // We need a factory-method name at this point; throw an
-                // exception
-                // if not so.
+            // Class name can be null when a factory component was used to construct the bean.
+            if (className == null) {
+
+                // We need a factory-method name at this point; throw an exception if not so.
                 if (factoryMethodNameOrNull == null) {
                     throw new IllegalStateException(
                             "Invalid metadata: class-name nor factory-method is provided! "
-                                    + pBeanMetadata);
+                                    + metadata);
                 }
 
                 // Get the metadata of the factory component and validate it.
@@ -342,7 +345,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
                 // through
                 // another factory. Because this, we need to call this method
                 // recursively
-                final Class<?> factoryComponentClass = loadClassFromBundle(factoryComponentMetadata);
+                final Class<?> factoryComponentClass = findType(factoryComponentMetadata);
 
                 // Almost at the end; what we finally need is the return type of
                 // the
@@ -354,46 +357,38 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
                 clazz = determineFactoryReturnType(beanMetadata);
             } else {
                 // Simply load the class with the class-name specified
-                clazz = loadClassFromBundle(pBeanMetadata.getId(),
-                        beanMetadata.getClassName());
+                clazz = loadClass(className);
             }
-        } else if (pBeanMetadata instanceof ServiceReferenceMetadata) {
-            final ServiceReferenceMetadata referenceMetadata = (ServiceReferenceMetadata) pBeanMetadata;
+        } else if (metadata instanceof ServiceReferenceMetadata) {
+            final ServiceReferenceMetadata referenceMetadata = (ServiceReferenceMetadata) metadata;
 
             // getId() can be null when the reference-element is nested; skip it
             // because we must not consider nested elements!
             if (referenceMetadata.getId() != null
                     && referenceMetadata.getInterface() != null) {
-                clazz = loadClassFromBundle(referenceMetadata.getId(),
-                        referenceMetadata.getInterface());
+                clazz = loadClass(referenceMetadata.getInterface());
             }
         } else {
             throw new CannotLoadBeanClassException(bundleContext.getBundle().toString(),
-                    pBeanMetadata.getId(), pBeanMetadata.toString(),
+                    metadata.getId(), metadata.toString(),
                     new ClassNotFoundException());
         }
 
         return clazz;
     }
 
-    private Class<?> determineFactoryReturnType(final BeanMetadata pFactoryComponentMetadata) throws NoSuchMethodException {
-        final Class<?> factoryClass = loadClassFromBundle(
-                pFactoryComponentMetadata.getId(),
-                pFactoryComponentMetadata.getClassName());
-        return factoryClass.getMethod(pFactoryComponentMetadata.getFactoryMethod()).getReturnType();
+    private Class<?> determineFactoryReturnType(final BeanMetadata metadata) throws
+            ClassNotFoundException, NoSuchMethodException {
+        final Class<?> factoryClass = loadClass(metadata.getClassName());
+        return factoryClass.getMethod(metadata.getFactoryMethod()).getReturnType();
     }
 
-    private Class<?> loadClassFromBundle(final String id, final String className) {
-        try {
-            return bundleContext.getBundle().loadClass(className);
-        } catch (final ClassNotFoundException e) {
-            throw new CannotLoadBeanClassException(bundleContext.getBundle().toString(),
-                    id, className, e);
-        }
+    private Class<?> loadClass(final String className) throws ClassNotFoundException {
+        return bundleContext.getBundle().loadClass(className);
     }
 
     @Override
     public String[] getAliases(final String s) {
-        return new String[0];
+        return EMPTY_ALIASES;
     }
 }
