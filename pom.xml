@@ -15,6 +15,7 @@
 
     <modules>
         <module>spring-web-blueprint</module>
+	    <module>spring-web-blueprint-feature</module>
     </modules>
 
     <properties>
