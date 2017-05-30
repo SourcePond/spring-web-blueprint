@@ -11,7 +11,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
-package ch.sourcepond.spring.web.blueprint;
+package blueprint;
 
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.InvalidSyntaxException;
@@ -54,7 +54,7 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
         }
 
         final DefaultListableBeanFactory defaultListableBeanFactory = new DefaultListableBeanFactory(blueprintBeanFactory);
-        GenericWebApplicationContext context = new GenericWebApplicationContext(defaultListableBeanFactory);
+        final GenericWebApplicationContext context = new GenericWebApplicationContext(defaultListableBeanFactory);
         ctx.setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, context);
     }
 }

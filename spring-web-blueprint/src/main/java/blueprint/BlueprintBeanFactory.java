@@ -11,7 +11,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
-package ch.sourcepond.spring.web.blueprint;
+package blueprint;
 
 import org.osgi.framework.*;
 import org.osgi.service.blueprint.container.BlueprintContainer;
@@ -39,7 +39,6 @@ import static org.slf4j.LoggerFactory.getLogger;
  * An newly created instance will wait until the {@link BlueprintContainer} associated with the
  * bundle of {@link BundleContext} specified has been started and registered as service before
  * it is in operational state.
- *
  */
 class BlueprintBeanFactory implements BeanFactory, ServiceListener {
     private static final Logger LOG = getLogger(BlueprintBeanFactory.class);
@@ -341,19 +340,15 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
 
                 final ComponentMetadata factoryComponentMetadata = findMetadata(getComponentId(factoryComponent));
 
-                // The factory-component itself could also be constructed
-                // through
+                // The factory-component itself could also be constructed through
                 // another factory. Because this, we need to call this method
                 // recursively
                 final Class<?> factoryComponentClass = findType(factoryComponentMetadata);
 
-                // Almost at the end; what we finally need is the return type of
-                // the
-                // factory-method
+                // Almost at the end; what we finally need is the return type of the factory-method
                 clazz = factoryComponentClass.getMethod(factoryMethodNameOrNull).getReturnType();
             } else if (factoryMethodNameOrNull != null) {
-                // A static factory-method should be defined; get its return
-                // type.
+                // A static factory-method should be defined; get its return type.
                 clazz = determineFactoryReturnType(beanMetadata);
             } else {
                 // Simply load the class with the class-name specified
@@ -364,8 +359,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
 
             // getId() can be null when the reference-element is nested; skip it
             // because we must not consider nested elements!
-            if (referenceMetadata.getId() != null
-                    && referenceMetadata.getInterface() != null) {
+            if (referenceMetadata.getInterface() != null) {
                 clazz = loadClass(referenceMetadata.getInterface());
             }
         } else {
