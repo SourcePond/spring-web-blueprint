@@ -11,9 +11,8 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
-package ch.sourcepond.spring.web.blueprint;
+package ch.sourcepond.spring.web.blueprint.internal;
 
-import ch.sourcepond.spring.web.blueprint.BlueprintBeanFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.osgi.framework.*;
@@ -22,7 +21,7 @@ import org.springframework.beans.factory.BeanDefinitionStoreException;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-import static ch.sourcepond.spring.web.blueprint.BlueprintBeanFactory.BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN;
+import static ch.sourcepond.spring.web.blueprint.internal.BlueprintBeanFactory.BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN;
 import static java.lang.Thread.currentThread;
 import static java.lang.Thread.sleep;
 import static org.junit.Assert.*;

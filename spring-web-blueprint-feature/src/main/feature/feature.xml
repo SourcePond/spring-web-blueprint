@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<features xmlns="http://karaf.apache.org/xmlns/features/v1.4.0" name="spring-web-blueprint-feature">
+    <feature name="spring-web-blueprint-feature" description="spring-web-blueprint-feature" version="1.0.0.SNAPSHOT">
+        <details>This is the parent POM for all OSGi-bundles published by SourcePond.</details>
+        <bundle dependency="true">mvn:org.apache.servicemix.bundles/org.apache.servicemix.bundles.spring-core/[4.2,5.0)</bundle>
+        <bundle dependency="true">mvn:org.apache.servicemix.bundles/org.apache.servicemix.bundles.spring-web/[4.2,5.0)</bundle>
+        <bundle dependency="true">mvn:org.apache.servicemix.bundles/org.apache.servicemix.bundles.spring-beans/[4.2,5.0)</bundle>
+    </feature>
+</features>

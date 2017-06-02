@@ -11,27 +11,32 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
-package ch.sourcepond.spring.web.blueprint;
+package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.osgi.framework.*;
+import org.osgi.framework.wiring.BundleWiring;
 import org.osgi.service.blueprint.container.BlueprintContainer;
 import org.osgi.service.blueprint.container.NoSuchComponentException;
 import org.osgi.service.blueprint.reflect.*;
 import org.slf4j.Logger;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.PropertyEditorRegistrar;
+import org.springframework.beans.PropertyEditorRegistry;
+import org.springframework.beans.TypeConverter;
 import org.springframework.beans.factory.*;
+import org.springframework.beans.factory.config.*;
 import org.springframework.core.ResolvableType;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.util.StringValueResolver;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.beans.PropertyEditor;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.util.*;
 
 import static java.lang.Thread.currentThread;
 import static java.util.Objects.requireNonNull;
 import static org.osgi.framework.ServiceEvent.*;
-import static org.osgi.service.blueprint.reflect.BeanMetadata.SCOPE_PROTOTYPE;
-import static org.osgi.service.blueprint.reflect.BeanMetadata.SCOPE_SINGLETON;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -40,14 +45,14 @@ import static org.slf4j.LoggerFactory.getLogger;
  * bundle of {@link BundleContext} specified has been started and registered as service before
  * it is in operational state.
  */
-class BlueprintBeanFactory implements BeanFactory, ServiceListener {
+public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceListener {
     private static final Logger LOG = getLogger(BlueprintBeanFactory.class);
     static final String BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN = "BlueprintContainer container has been shutdown";
 
     /**
      * Aliases are currently not supported by the Blueprint specification.
      */
-    static final String[] EMPTY_ALIASES = new String[0];
+    static final String[] EMPTY = new String[0];
 
     /**
      * Service property name of the corresponding WABs symbolic-name. This
@@ -55,7 +60,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
      * {@link BlueprintContainer} through the OSGi service registry. See OSGi
      * Enterprise specification R5 (page 230, section 121.3.10).
      */
-    String OSGI_BLUEPRINT_CONTAINER_SYMBOLIC_NAME = "osgi.blueprint.container.symbolicname";
+    static final String OSGI_BLUEPRINT_CONTAINER_SYMBOLIC_NAME = "osgi.blueprint.container.symbolicname";
 
     /**
      * Service property name of the corresponding WABs version. This property is
@@ -63,12 +68,13 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
      * through the OSGi service registry. See OSGi Enterprise specification R5
      * (page 230, section 121.3.10).
      */
-    String OSGI_BLUEPRINT_CONTAINER_VERSION = "osgi.blueprint.container.version";
+    static final String OSGI_BLUEPRINT_CONTAINER_VERSION = "osgi.blueprint.container.version";
 
     private final BundleContext bundleContext;
     private final String filter;
     private boolean destroyed;
     private volatile BlueprintContainer container;
+    private volatile Set<String> componentIds;
 
     /**
      * Creates a new instance of this class. The instance will wait until
@@ -78,7 +84,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
      *
      * @param bundleContext
      */
-    BlueprintBeanFactory(final BundleContext bundleContext) {
+    public BlueprintBeanFactory(final BundleContext bundleContext) {
         this.bundleContext = requireNonNull(bundleContext, "Bundle-Context is null");
         final Bundle bundle = bundleContext.getBundle();
         filter = "(&(" + Constants.OBJECTCLASS + "="
@@ -89,7 +95,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
                 + bundle.getVersion() + "))";
     }
 
-    String getFilter() {
+    public String getFilter() {
         return filter;
     }
 
@@ -159,6 +165,32 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
         }
     }
 
+    private Set<String> getFilteredComponentIds() {
+        Set<String> ids = componentIds;
+        if (ids == null) {
+            final BlueprintContainer container = getContainer();
+            ids = new HashSet<>(container.getComponentIds());
+            ids.removeIf(id -> isIncompatible(container.getComponentMetadata(id)));
+            componentIds = ids;
+        }
+        return ids;
+    }
+
+    Collection<String> getBeanNamesForType(final Class<?> type) {
+        final Set<String> beanNames = new HashSet<>();
+        for (final String id : getFilteredComponentIds()) {
+            try {
+                final Class<?> cl = findType(findMetadata(id));
+                if (type.isAssignableFrom(cl)) {
+                    beanNames.add(id);
+                }
+            } catch (final Exception e) {
+                LOG.warn(e.getMessage(), e);
+            }
+        }
+        return beanNames;
+    }
+
     @Override
     public Object getBean(final String s) throws BeansException {
         try {
@@ -188,7 +220,7 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
     public <T> T getBean(final Class<T> aClass) throws BeansException {
         requireNonNull(aClass, "Class is null");
         final BlueprintContainer container = getContainer();
-        final Set<String> ids = container.getComponentIds();
+        final Set<String> ids = getFilteredComponentIds();
         final Map<String, Object> beans = new HashMap<>(ids.size());
         ids.forEach(id -> beans.put(id, getContainer().getComponentInstance(id)));
 
@@ -278,12 +310,15 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
         }
     }
 
+    private boolean isIncompatible(final ComponentMetadata metadata) {
+        return !(metadata instanceof BeanMetadata) && !(metadata instanceof ServiceReferenceMetadata);
+    }
+
     private ComponentMetadata findMetadata(final String id) {
         try {
             final ComponentMetadata metadata = getContainer().getComponentMetadata(id);
 
-            if (!(metadata instanceof BeanMetadata)
-                    && !(metadata instanceof ServiceReferenceMetadata)) {
+            if (isIncompatible(metadata)) {
                 throw new NoSuchComponentException("Actual metadata-class "
                         + metadata.getClass() + " is not assignable from "
                         + BeanMetadata.class.getName() + " or "
@@ -383,6 +418,238 @@ class BlueprintBeanFactory implements BeanFactory, ServiceListener {
 
     @Override
     public String[] getAliases(final String s) {
-        return EMPTY_ALIASES;
+        return EMPTY;
+    }
+
+    @Override
+    public void setParentBeanFactory(final BeanFactory parentBeanFactory) throws IllegalStateException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setBeanClassLoader(final ClassLoader beanClassLoader) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ClassLoader getBeanClassLoader() {
+        return bundleContext.getBundle().adapt(BundleWiring.class).getClassLoader();
+    }
+
+    @Override
+    public void setTempClassLoader(final ClassLoader tempClassLoader) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ClassLoader getTempClassLoader() {
+        // noop
+        return null;
+    }
+
+    @Override
+    public void setCacheBeanMetadata(final boolean cacheBeanMetadata) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean isCacheBeanMetadata() {
+        return false;
+    }
+
+    @Override
+    public void setBeanExpressionResolver(final BeanExpressionResolver resolver) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public BeanExpressionResolver getBeanExpressionResolver() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setConversionService(final ConversionService conversionService) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ConversionService getConversionService() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void addPropertyEditorRegistrar(final PropertyEditorRegistrar registrar) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void registerCustomEditor(final Class<?> requiredType, final Class<? extends PropertyEditor> propertyEditorClass) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void copyRegisteredEditorsTo(final PropertyEditorRegistry registry) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setTypeConverter(final TypeConverter typeConverter) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public TypeConverter getTypeConverter() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void addEmbeddedValueResolver(final StringValueResolver valueResolver) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean hasEmbeddedValueResolver() {
+        return false;
+    }
+
+    @Override
+    public String resolveEmbeddedValue(final String value) {
+        return value;
+    }
+
+    @Override
+    public void addBeanPostProcessor(final BeanPostProcessor beanPostProcessor) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int getBeanPostProcessorCount() {
+        return 0;
+    }
+
+    @Override
+    public void registerScope(final String scopeName, final Scope scope) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String[] getRegisteredScopeNames() {
+        return EMPTY;
+    }
+
+    @Override
+    public Scope getRegisteredScope(final String scopeName) {
+        // noop
+        return null;
+    }
+
+    @Override
+    public AccessControlContext getAccessControlContext() {
+        return AccessController.getContext();
+    }
+
+    @Override
+    public void copyConfigurationFrom(final ConfigurableBeanFactory otherFactory) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void registerAlias(final String beanName, final String alias) throws BeanDefinitionStoreException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void resolveAliases(final StringValueResolver valueResolver) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public BeanDefinition getMergedBeanDefinition(final String beanName) throws NoSuchBeanDefinitionException {
+        return null;
+    }
+
+    @Override
+    public boolean isFactoryBean(final String name) throws NoSuchBeanDefinitionException {
+        return false;
+    }
+
+    @Override
+    public void setCurrentlyInCreation(final String beanName, final boolean inCreation) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean isCurrentlyInCreation(final String beanName) {
+        return false;
+    }
+
+    @Override
+    public void registerDependentBean(final String beanName, final String dependentBeanName) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String[] getDependentBeans(final String beanName) {
+        return EMPTY;
+    }
+
+    @Override
+    public String[] getDependenciesForBean(final String beanName) {
+        return EMPTY;
+    }
+
+    @Override
+    public void destroyBean(final String beanName, final Object beanInstance) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void destroyScopedBean(final String beanName) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void destroySingletons() {
+        // noop
+    }
+
+    @Override
+    public BeanFactory getParentBeanFactory() {
+        return null;
+    }
+
+    @Override
+    public boolean containsLocalBean(final String name) {
+        return containsBean(name);
+    }
+
+    @Override
+    public void registerSingleton(final String beanName, final Object singletonObject) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object getSingleton(final String beanName) {
+        return getBean(beanName);
+    }
+
+    @Override
+    public boolean containsSingleton(final String beanName) {
+        return getFilteredComponentIds().contains(beanName);
+    }
+
+    @Override
+    public String[] getSingletonNames() {
+        return getFilteredComponentIds().toArray(new String[0]);
+    }
+
+    @Override
+    public int getSingletonCount() {
+        return getFilteredComponentIds().size();
+    }
+
+    @Override
+    public Object getSingletonMutex() {
+        return this;
     }
 }
