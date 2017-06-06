@@ -66,7 +66,7 @@
     <scm>
         <url>https://${repo.domain}/${repo.path}</url>
         <connection>scm:git:${project.scm.url}.git</connection>
-        <developerConnection>scm:git:ssh://git@${repo.domain}/${repo.path}.git</developerConnection>
+        <developerConnection>scm:git:ssh://git@${repo.domain}/spring-web-blueprint.git</developerConnection>
     </scm>
 
     <ciManagement>
