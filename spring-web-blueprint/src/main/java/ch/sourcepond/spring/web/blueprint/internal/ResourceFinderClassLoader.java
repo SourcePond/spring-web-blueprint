@@ -30,11 +30,11 @@ public class ResourceFinderClassLoader extends ClassLoader {
     private final BundleContext context;
 
     public ResourceFinderClassLoader(final BundleContext context) {
-        super(getClassLoader(context.getBundle()));
+        super(getBundleClassLoader(context.getBundle()));
         this.context = context;
     }
 
-    private static ClassLoader getClassLoader(final Bundle bundle) {
+    static ClassLoader getBundleClassLoader(final Bundle bundle) {
         return bundle.adapt(BundleWiring.class).getClassLoader();
     }
 
@@ -42,7 +42,7 @@ public class ResourceFinderClassLoader extends ClassLoader {
     protected Enumeration<URL> findResources(final String name) throws IOException {
         final List<URL> resources = new LinkedList<>();
         for (final Bundle b : context.getBundles()) {
-            final ClassLoader cl = getClassLoader(b);
+            final ClassLoader cl = getBundleClassLoader(b);
             if (cl != null) {
                 final Enumeration<URL> e = cl.getResources(name);
                 while (e.hasMoreElements()) {

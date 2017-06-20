@@ -14,7 +14,6 @@ limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.osgi.framework.*;
-import org.osgi.framework.wiring.BundleWiring;
 import org.osgi.service.blueprint.container.BlueprintContainer;
 import org.osgi.service.blueprint.container.NoSuchComponentException;
 import org.osgi.service.blueprint.reflect.*;
@@ -25,19 +24,39 @@ import org.springframework.beans.PropertyEditorRegistry;
 import org.springframework.beans.TypeConverter;
 import org.springframework.beans.factory.*;
 import org.springframework.beans.factory.config.*;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.MessageSource;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.context.NoSuchMessageException;
+import org.springframework.context.support.DelegatingMessageSource;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.util.StringValueResolver;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.support.ServletContextResourcePatternResolver;
+import org.springframework.web.context.support.StandardServletEnvironment;
 
+import javax.servlet.ServletContext;
 import java.beans.PropertyEditor;
+import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.security.AccessControlContext;
 import java.security.AccessController;
+import java.time.Instant;
 import java.util.*;
 
+import static ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader.getBundleClassLoader;
 import static java.lang.Thread.currentThread;
+import static java.time.Instant.now;
+import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
 import static org.osgi.framework.ServiceEvent.*;
 import static org.slf4j.LoggerFactory.getLogger;
+import static org.springframework.context.support.AbstractApplicationContext.MESSAGE_SOURCE_BEAN_NAME;
 
 /**
  * {@link BeanFactory} implementation which adapts to {@link BlueprintContainer}.
@@ -45,8 +64,8 @@ import static org.slf4j.LoggerFactory.getLogger;
  * bundle of {@link BundleContext} specified has been started and registered as service before
  * it is in operational state.
  */
-public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceListener {
-    private static final Logger LOG = getLogger(BlueprintBeanFactory.class);
+public final class BlueprintApplicationContext implements WebApplicationContext, ConfigurableBeanFactory, ServiceListener {
+    private static final Logger LOG = getLogger(BlueprintApplicationContext.class);
     static final String BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN = "BlueprintContainer container has been shutdown";
 
     /**
@@ -70,9 +89,16 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
      */
     static final String OSGI_BLUEPRINT_CONTAINER_VERSION = "osgi.blueprint.container.version";
 
+    private final Instant startTime = now();
+    private final ResourcePatternResolver resolver = new ServletContextResourcePatternResolver(this);
+    private final ServletContext servletContext;
+    private final Environment environment;
     private final BundleContext bundleContext;
     private final String filter;
     private boolean destroyed;
+    private volatile MessageSource source;
+    private volatile ClassLoader classLoader;
+    private volatile ClassLoader tempClassLoader;
     private volatile BlueprintContainer container;
     private volatile Set<String> componentIds;
 
@@ -82,9 +108,14 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
      * specified has been started and registered as service before it is in
      * operational state.
      *
+     * @param servletContext
      * @param bundleContext
      */
-    public BlueprintBeanFactory(final BundleContext bundleContext) {
+    public BlueprintApplicationContext(final ServletContext servletContext, final BundleContext bundleContext) {
+        this.servletContext = servletContext;
+        final StandardServletEnvironment environment = new StandardServletEnvironment();
+        environment.initPropertySources(servletContext, null);
+        this.environment = environment;
         this.bundleContext = requireNonNull(bundleContext, "Bundle-Context is null");
         final Bundle bundle = bundleContext.getBundle();
         filter = "(&(" + Constants.OBJECTCLASS + "="
@@ -93,6 +124,11 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
                 + bundle.getSymbolicName() + ")("
                 + OSGI_BLUEPRINT_CONTAINER_VERSION + "="
                 + bundle.getVersion() + "))";
+        classLoader = getBundleClassLoader(bundle);
+    }
+
+    private Bundle getBundle() {
+        return bundleContext.getBundle();
     }
 
     public String getFilter() {
@@ -176,7 +212,32 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
         return ids;
     }
 
-    Collection<String> getBeanNamesForType(final Class<?> type) {
+    @Override
+    public boolean containsBeanDefinition(String beanName) {
+        return getFilteredComponentIds().contains(beanName);
+    }
+
+    @Override
+    public int getBeanDefinitionCount() {
+        return getFilteredComponentIds().size();
+    }
+
+    @Override
+    public String[] getBeanDefinitionNames() {
+        return getFilteredComponentIds().toArray(EMPTY);
+    }
+
+    @Override
+    public String[] getBeanNamesForType(ResolvableType type) {
+        return getBeanNamesForType(type.getRawClass());
+    }
+
+    public String[] getBeanNamesForType(final Class<?> type) {
+        return getBeanNamesForType(type, false, false);
+    }
+
+    @Override
+    public String[] getBeanNamesForType(Class<?> type, boolean includeNonSingletons, boolean allowEagerInit) {
         final Set<String> beanNames = new HashSet<>();
         for (final String id : getFilteredComponentIds()) {
             try {
@@ -188,7 +249,42 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
                 LOG.warn(e.getMessage(), e);
             }
         }
-        return beanNames;
+        return beanNames.toArray(EMPTY);
+    }
+
+    @Override
+    public <T> Map<String, T> getBeansOfType(Class<T> type) throws BeansException {
+        return getBeansOfType(type, false, false);
+    }
+
+    @Override
+    public <T> Map<String, T> getBeansOfType(Class<T> type, boolean includeNonSingletons, boolean allowEagerInit) throws BeansException {
+        final Map<String, T> beans = new HashMap<>();
+        for (final String name : getBeanNamesForType(type)) {
+            beans.put(name, getBean(name, type));
+        }
+        return beans;
+    }
+
+    @Override
+    public String[] getBeanNamesForAnnotation(Class<? extends Annotation> annotationType) {
+        // Not supported by BlueprintContainer
+        return EMPTY;
+    }
+
+    @Override
+    public Map<String, Object> getBeansWithAnnotation(Class<? extends Annotation> annotationType) throws BeansException {
+        // Not supported by BlueprintContainer
+        return emptyMap();
+    }
+
+    @Override
+    public <A extends Annotation> A findAnnotationOnBean(String beanName, Class<A> annotationType) throws NoSuchBeanDefinitionException {
+        // Throw NoSuchBeanDefinitionException if bean does not exist
+        getBean(beanName);
+
+        // Not supported by BlueprintContainer
+        return null;
     }
 
     @Override
@@ -423,28 +519,27 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
 
     @Override
     public void setParentBeanFactory(final BeanFactory parentBeanFactory) throws IllegalStateException {
-        throw new UnsupportedOperationException();
+        throw new IllegalStateException("Settings a parent BeanFactory is not supported");
     }
 
     @Override
     public void setBeanClassLoader(final ClassLoader beanClassLoader) {
-        throw new UnsupportedOperationException();
+        classLoader = beanClassLoader;
     }
 
     @Override
     public ClassLoader getBeanClassLoader() {
-        return bundleContext.getBundle().adapt(BundleWiring.class).getClassLoader();
+        return classLoader;
     }
 
     @Override
     public void setTempClassLoader(final ClassLoader tempClassLoader) {
-        throw new UnsupportedOperationException();
+        this.tempClassLoader = tempClassLoader;
     }
 
     @Override
     public ClassLoader getTempClassLoader() {
-        // noop
-        return null;
+        return tempClassLoader;
     }
 
     @Override
@@ -474,7 +569,8 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
 
     @Override
     public ConversionService getConversionService() {
-        throw new UnsupportedOperationException();
+        // Not supported
+        return null;
     }
 
     @Override
@@ -651,5 +747,100 @@ public class BlueprintBeanFactory implements ConfigurableBeanFactory, ServiceLis
     @Override
     public Object getSingletonMutex() {
         return this;
+    }
+
+
+    @Override
+    public String getId() {
+        return getBundle().getSymbolicName();
+    }
+
+    @Override
+    public String getApplicationName() {
+        return "";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return getId();
+    }
+
+    @Override
+    public long getStartupDate() {
+        return startTime.toEpochMilli();
+    }
+
+    @Override
+    public ApplicationContext getParent() {
+        // Noop
+        return null;
+    }
+
+    @Override
+    public AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException {
+        throw new IllegalStateException("AutowireCapableBeanFactory not supported");
+    }
+
+    @Override
+    public void publishEvent(ApplicationEvent event) {
+        LOG.debug("noop");
+    }
+
+    @Override
+    public void publishEvent(Object event) {
+        LOG.debug("noop");
+    }
+
+    private MessageSource getMessageSource() {
+        MessageSource source = this.source;
+        if (source == null) {
+            try {
+                source = getBean(MESSAGE_SOURCE_BEAN_NAME, MessageSource.class);
+            } catch (final NoSuchBeanDefinitionException e) {
+                source = new DelegatingMessageSource();
+            }
+            this.source = source;
+        }
+        return source;
+    }
+
+    @Override
+    public String getMessage(String code, Object[] args, String defaultMessage, Locale locale) {
+        return getMessageSource().getMessage(code, args, defaultMessage, locale);
+    }
+
+    @Override
+    public String getMessage(String code, Object[] args, Locale locale) throws NoSuchMessageException {
+        return getMessageSource().getMessage(code, args, locale);
+    }
+
+    @Override
+    public String getMessage(MessageSourceResolvable resolvable, Locale locale) throws NoSuchMessageException {
+        return getMessageSource().getMessage(resolvable, locale);
+    }
+
+    @Override
+    public Environment getEnvironment() {
+        return environment;
+    }
+
+    @Override
+    public Resource[] getResources(String locationPattern) throws IOException {
+        return resolver.getResources(locationPattern);
+    }
+
+    @Override
+    public Resource getResource(String location) {
+        return resolver.getResource(location);
+    }
+
+    @Override
+    public ClassLoader getClassLoader() {
+        return getBeanClassLoader();
+    }
+
+    @Override
+    public ServletContext getServletContext() {
+        return servletContext;
     }
 }

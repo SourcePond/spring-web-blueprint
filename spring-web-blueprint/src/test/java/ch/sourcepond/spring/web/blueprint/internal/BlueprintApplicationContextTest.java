@@ -14,14 +14,16 @@ limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.osgi.framework.*;
 import org.osgi.service.blueprint.container.BlueprintContainer;
 import org.springframework.beans.factory.BeanDefinitionStoreException;
 
+import javax.servlet.ServletContext;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BlueprintBeanFactory.BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN;
+import static ch.sourcepond.spring.web.blueprint.internal.BlueprintApplicationContext.BLUEPRINT_CONTAINER_CONTAINER_HAS_BEEN_SHUTDOWN;
 import static java.lang.Thread.currentThread;
 import static java.lang.Thread.sleep;
 import static org.junit.Assert.*;
@@ -34,17 +36,19 @@ import static org.osgi.framework.Version.valueOf;
 /**
  *
  */
-public class BlueprintBeanFactoryTest {
+@Ignore
+public class BlueprintApplicationContextTest {
     private static final String ANY_SYMBOLIC_NAME = "anySymbolicName";
     private static final String ANY_VERSION = "1.2.3";
     private static final String ANY_NAME = "anyName";
     private static final Object ANY_BEAN = new Object();
     private static final String FILTER = "(&(objectClass=org.osgi.service.blueprint.container.BlueprintContainer)(osgi.blueprint.container.symbolicname=anySymbolicName)(osgi.blueprint.container.version=1.2.3))";
+    private final ServletContext servletContext = mock(ServletContext.class);
     private final Bundle bundle = mock(Bundle.class);
     private final BundleContext bundleContext = mock(BundleContext.class);
     private final ServiceReference<BlueprintContainer> containerRef = mock(ServiceReference.class);
     private final BlueprintContainer container = mock(BlueprintContainer.class);
-    private BlueprintBeanFactory factory;
+    private BlueprintApplicationContext factory;
 
     @Before
     public void setup() {
@@ -53,7 +57,7 @@ public class BlueprintBeanFactoryTest {
         when(bundleContext.getBundle()).thenReturn(bundle);
         when(bundleContext.getService(containerRef)).thenReturn(container);
         when(container.getComponentInstance(ANY_NAME)).thenReturn(ANY_BEAN);
-        factory = new BlueprintBeanFactory(bundleContext);
+        factory = new BlueprintApplicationContext(servletContext, bundleContext);
     }
 
     @Test

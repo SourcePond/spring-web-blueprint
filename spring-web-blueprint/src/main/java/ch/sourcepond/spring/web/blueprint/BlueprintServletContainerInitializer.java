@@ -13,8 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint;
 
-import ch.sourcepond.spring.web.blueprint.internal.BlueprintBeanFactory;
-import ch.sourcepond.spring.web.blueprint.internal.ParentAwareListableBeanFactory;
+import ch.sourcepond.spring.web.blueprint.internal.BlueprintApplicationContext;
 import ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
@@ -88,9 +87,9 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
             final ServletContext sctx = event.getServletContext();
             final BundleContext bundleContext = (BundleContext) event.getValue();
             setBundleContext(bundleContext);
-            final BlueprintBeanFactory blueprintBeanFactory = new BlueprintBeanFactory(bundleContext);
+            final BlueprintApplicationContext blueprintApplicationContext = new BlueprintApplicationContext(sctx, bundleContext);
             try {
-                bundleContext.addServiceListener(blueprintBeanFactory, blueprintBeanFactory.getFilter());
+                bundleContext.addServiceListener(blueprintApplicationContext, blueprintApplicationContext.getFilter());
             } catch (final InvalidSyntaxException e) {
                 // This should never happen
                 LOG.error(e.getMessage(), e);
@@ -99,39 +98,23 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
             final ClassLoader ldr = currentThread().getContextClassLoader();
             currentThread().setContextClassLoader(new ResourceFinderClassLoader(bundleContext));
             try {
-                initializeWebContext(sctx, bundleContext, blueprintBeanFactory);
+                final ConfigurableWebApplicationContext webContext = createContext(bundleContext.getBundle(), sctx.getInitParameter(BLUEPRINT_CONTEXT_CLASS));
+                webContext.setParent(blueprintApplicationContext);
+                webContext.setServletContext(sctx);
+                String configLocationParam = sctx.getInitParameter(CONFIG_LOCATION_PARAM);
+                if (configLocationParam != null) {
+                    webContext.setConfigLocation(configLocationParam);
+                }
+
+                webContext.refresh();
+                sctx.setAttribute(CONTEXT_ATTRIBUTE, BLUEPRINT_CONTEXT);
+                sctx.setAttribute(BLUEPRINT_CONTEXT, webContext);
             } catch (final Exception e) {
                 sctx.setAttribute(BLUEPRINT_CONTEXT, e);
             } finally {
                 currentThread().setContextClassLoader(ldr);
             }
         }
-    }
-
-    private void initializeWebContext(final ServletContext sctx,
-                                      final BundleContext bundleContext,
-                                      final BlueprintBeanFactory blueprintBeanFactory)
-            throws ClassNotFoundException, IllegalAccessException, InstantiationException {
-        // Firstly, create app-context; this could fail so do it first
-        final ConfigurableWebApplicationContext webContext = createContext(bundleContext.getBundle(), sctx.getInitParameter(BLUEPRINT_CONTEXT_CLASS));
-
-        // Setup bridge to Blueprint-Container
-        final ParentAwareListableBeanFactory defaultListableBeanFactory = new ParentAwareListableBeanFactory(blueprintBeanFactory);
-
-        final GenericWebApplicationBundleContext bridge = new GenericWebApplicationBundleContext(defaultListableBeanFactory);
-        bridge.setServletContext(sctx);
-        bridge.refresh();
-
-        webContext.setParent(bridge);
-        webContext.setServletContext(sctx);
-        String configLocationParam = sctx.getInitParameter(CONFIG_LOCATION_PARAM);
-        if (configLocationParam != null) {
-            webContext.setConfigLocation(configLocationParam);
-        }
-
-        webContext.refresh();
-        sctx.setAttribute(CONTEXT_ATTRIBUTE, BLUEPRINT_CONTEXT);
-        sctx.setAttribute(BLUEPRINT_CONTEXT, webContext);
     }
 
     @Override
