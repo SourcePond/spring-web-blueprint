@@ -16,8 +16,12 @@ package ch.sourcepond.spring.web.blueprint;
 import ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.MessageSource;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
+
+import javax.servlet.ServletContext;
+import java.io.IOException;
 
 import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
@@ -31,7 +35,7 @@ public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfi
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(getBundle(getServletContext()), super.getResourcePatternResolver());
+        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
     }
 
     /**
@@ -43,5 +47,11 @@ public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfi
         } catch (final NoSuchBeanDefinitionException e) {
             return null;
         }
+    }
+
+    @Override
+    public void setServletContext(final ServletContext servletContext) {
+        ((BundleResourcePatternResolver)getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        super.setServletContext(servletContext);
     }
 }

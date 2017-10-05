@@ -49,7 +49,7 @@ public class GenericWebApplicationBundleContext extends GenericWebApplicationCon
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(getBundle(getServletContext()), super.getResourcePatternResolver());
+        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
     }
 
     /**
@@ -61,5 +61,11 @@ public class GenericWebApplicationBundleContext extends GenericWebApplicationCon
         } catch (final NoSuchBeanDefinitionException e) {
             return null;
         }
+    }
+
+    @Override
+    public void setServletContext(final ServletContext servletContext) {
+        ((BundleResourcePatternResolver) getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        super.setServletContext(servletContext);
     }
 }

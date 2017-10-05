@@ -13,17 +13,37 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
-import org.osgi.framework.*;
+import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
+import org.osgi.framework.Constants;
+import org.osgi.framework.InvalidSyntaxException;
+import org.osgi.framework.ServiceEvent;
+import org.osgi.framework.ServiceListener;
+import org.osgi.framework.ServiceReference;
 import org.osgi.service.blueprint.container.BlueprintContainer;
 import org.osgi.service.blueprint.container.NoSuchComponentException;
-import org.osgi.service.blueprint.reflect.*;
+import org.osgi.service.blueprint.reflect.BeanMetadata;
+import org.osgi.service.blueprint.reflect.ComponentMetadata;
+import org.osgi.service.blueprint.reflect.RefMetadata;
+import org.osgi.service.blueprint.reflect.ServiceReferenceMetadata;
+import org.osgi.service.blueprint.reflect.Target;
 import org.slf4j.Logger;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyEditorRegistrar;
 import org.springframework.beans.PropertyEditorRegistry;
 import org.springframework.beans.TypeConverter;
-import org.springframework.beans.factory.*;
-import org.springframework.beans.factory.config.*;
+import org.springframework.beans.factory.BeanDefinitionStoreException;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanNotOfRequiredTypeException;
+import org.springframework.beans.factory.CannotLoadBeanClassException;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.BeanExpressionResolver;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.beans.factory.config.Scope;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.MessageSource;
@@ -47,14 +67,21 @@ import java.lang.annotation.Annotation;
 import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.time.Instant;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 import static ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader.getBundleClassLoader;
 import static java.lang.Thread.currentThread;
 import static java.time.Instant.now;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
-import static org.osgi.framework.ServiceEvent.*;
+import static org.osgi.framework.ServiceEvent.MODIFIED_ENDMATCH;
+import static org.osgi.framework.ServiceEvent.REGISTERED;
+import static org.osgi.framework.ServiceEvent.UNREGISTERING;
 import static org.slf4j.LoggerFactory.getLogger;
 import static org.springframework.context.support.AbstractApplicationContext.MESSAGE_SOURCE_BEAN_NAME;
 
@@ -125,7 +152,10 @@ public final class BlueprintApplicationContext implements WebApplicationContext,
                 + OSGI_BLUEPRINT_CONTAINER_VERSION + "="
                 + bundle.getVersion() + "))";
         classLoader = getBundleClassLoader(bundle);
-        resolver = new BundleResourcePatternResolver(bundleContext.getBundle(), new ServletContextResourcePatternResolver(this));
+
+        final BundleResourcePatternResolver resolver = new BundleResourcePatternResolver(new ServletContextResourcePatternResolver(this));
+        resolver.setBundle(bundle);
+        this.resolver = resolver;
     }
 
     private Bundle getBundle() {

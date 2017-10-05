@@ -19,6 +19,8 @@ import org.springframework.context.MessageSource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.web.context.support.XmlWebApplicationContext;
 
+import javax.servlet.ServletContext;
+
 import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
 /**
@@ -31,7 +33,7 @@ public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(getBundle(getServletContext()), super.getResourcePatternResolver());
+        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
     }
 
     /**
@@ -43,5 +45,11 @@ public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
         } catch (final NoSuchBeanDefinitionException e) {
             return null;
         }
+    }
+
+    @Override
+    public void setServletContext(final ServletContext servletContext) {
+        ((BundleResourcePatternResolver)getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        super.setServletContext(servletContext);
     }
 }
