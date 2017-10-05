@@ -29,6 +29,8 @@ import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitia
  */
 public class GenericWebApplicationBundleContext extends GenericWebApplicationContext {
 
+    private BundleResourcePatternResolver resolver;
+
     public GenericWebApplicationBundleContext() {
     }
 
@@ -49,7 +51,10 @@ public class GenericWebApplicationBundleContext extends GenericWebApplicationCon
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        if (resolver == null) {
+            resolver = new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        }
+        return resolver;
     }
 
     /**
@@ -65,7 +70,7 @@ public class GenericWebApplicationBundleContext extends GenericWebApplicationCon
 
     @Override
     public void setServletContext(final ServletContext servletContext) {
-        ((BundleResourcePatternResolver) getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        resolver.setBundle(getBundle(servletContext));
         super.setServletContext(servletContext);
     }
 }

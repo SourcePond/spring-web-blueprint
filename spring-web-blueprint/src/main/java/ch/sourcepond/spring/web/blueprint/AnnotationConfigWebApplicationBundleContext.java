@@ -29,13 +29,17 @@ import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitia
  *
  */
 public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfigWebApplicationContext {
+    private BundleResourcePatternResolver resolver;
 
     /**
      *
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        if (resolver == null) {
+            resolver = new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        }
+        return resolver;
     }
 
     /**
@@ -51,7 +55,7 @@ public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfi
 
     @Override
     public void setServletContext(final ServletContext servletContext) {
-        ((BundleResourcePatternResolver)getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        resolver.setBundle(getBundle(servletContext));
         super.setServletContext(servletContext);
     }
 }

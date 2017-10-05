@@ -27,13 +27,17 @@ import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitia
  *
  */
 public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
+    private BundleResourcePatternResolver resolver;
 
     /**
      *
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        if (resolver == null) {
+            resolver = new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        }
+        return resolver;
     }
 
     /**
@@ -49,7 +53,7 @@ public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
 
     @Override
     public void setServletContext(final ServletContext servletContext) {
-        ((BundleResourcePatternResolver)getResourcePatternResolver()).setBundle(getBundle(servletContext));
+        resolver.setBundle(getBundle(servletContext));
         super.setServletContext(servletContext);
     }
 }
