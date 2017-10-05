@@ -16,6 +16,8 @@ package ch.sourcepond.spring.web.blueprint.internal;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.wiring.BundleWiring;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.ResourcePatternResolver;
@@ -28,11 +30,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static java.lang.Thread.currentThread;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
  */
 public class BundleResourcePatternResolver implements ResourcePatternResolver {
+    private static final Logger LOG = getLogger(BundleResourcePatternResolver.class);
     private static final Object MONITOR = new Object();
 
     /**
@@ -112,6 +116,9 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         final String protocol = extractProtocol(path);
         final String normalizedLocationPattern = path.substring(protocol
                 .length());
+
+        LOG.debug("Find resource for protocol {} and normalized location patter {}", protocol, normalizedLocationPattern);
+
         final InternalResolver resolver = getResolverOrNull(protocol);
 
         final Resource foundResource;
@@ -153,6 +160,8 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         final String protocol = extractProtocol(pattern);
         final String normalizedPathPattern = pattern
                 .substring(protocol.length());
+
+        LOG.debug("Find resources for protocol {} and normalized location patter {}", protocol, normalizedPathPattern);
 
         final InternalResolver resolver = getResolverOrNull(protocol);
         final Resource[] foundResources;
