@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import static ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader.getBundleClassLoader;
 import static java.lang.Thread.currentThread;
 import static java.util.Arrays.asList;
 import static org.slf4j.LoggerFactory.getLogger;
@@ -150,7 +151,7 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
             LOG.warn("Using system classloader because no bundle is set");
             return ClassLoader.getSystemClassLoader();
         }
-        return bundle.adapt(BundleWiring.class).getClassLoader();
+        return getBundleClassLoader(bundle);
     }
 
     /*
