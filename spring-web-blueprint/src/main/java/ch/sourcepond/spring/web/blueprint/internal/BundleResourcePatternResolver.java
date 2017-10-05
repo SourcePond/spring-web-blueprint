@@ -14,10 +14,7 @@ limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.osgi.framework.Bundle;
-import org.osgi.framework.BundleContext;
-import org.osgi.framework.wiring.BundleWiring;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.ResourcePatternResolver;
@@ -25,14 +22,13 @@ import org.springframework.util.AntPathMatcher;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import static ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader.getBundleClassLoader;
-import static java.lang.Thread.currentThread;
 import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -86,7 +82,7 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
     }
 
     public void setBundle(final Bundle bundle) {
-        this.bundle = bundle;
+        this.bundle = requireNonNull(bundle, "Bundle cannot be null");
     }
 
     /**
@@ -117,7 +113,7 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
     public final Resource getResource(final String path) {
         Resource foundResource = null;
         if (bundle == null) {
-            LOG.warn("No resource determined for {} because no bundle is set");
+            LOG.warn("No resource determined for {} because no bundle is set", path);
         } else {
             final String protocol = extractProtocol(path);
             final String normalizedLocationPattern = path.substring(protocol
@@ -167,7 +163,7 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         final Resource[] foundResources;
         if (bundle == null) {
             foundResources = new Resource[0];
-            LOG.warn("No resources determined for {} because no bundle is set");
+            LOG.warn("No resources determined for {} because no bundle is set", pattern);
         } else {
             final String protocol = extractProtocol(pattern);
             final String normalizedPathPattern = pattern

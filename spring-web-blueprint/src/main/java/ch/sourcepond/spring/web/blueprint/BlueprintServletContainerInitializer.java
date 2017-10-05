@@ -107,8 +107,8 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
             currentThread().setContextClassLoader(new ResourceFinderClassLoader(bundleContext));
             try {
                 final ConfigurableWebApplicationContext webContext = createContext(bundleContext.getBundle(), sctx.getInitParameter(BLUEPRINT_CONTEXT_CLASS));
-                webContext.setParent(blueprintApplicationContext);
                 webContext.setServletContext(sctx);
+                webContext.setParent(blueprintApplicationContext);
                 String configLocationParam = sctx.getInitParameter(CONFIG_LOCATION_PARAM);
                 if (configLocationParam != null) {
                     webContext.setConfigLocation(configLocationParam);
