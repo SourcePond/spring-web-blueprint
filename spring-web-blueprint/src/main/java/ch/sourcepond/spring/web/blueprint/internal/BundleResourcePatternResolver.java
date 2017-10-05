@@ -25,11 +25,13 @@ import org.springframework.util.AntPathMatcher;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import static java.lang.Thread.currentThread;
+import static java.util.Arrays.asList;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -116,9 +118,6 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         final String protocol = extractProtocol(path);
         final String normalizedLocationPattern = path.substring(protocol
                 .length());
-
-        LOG.debug("Find resource for protocol {} and normalized location patter {}", protocol, normalizedLocationPattern);
-
         final InternalResolver resolver = getResolverOrNull(protocol);
 
         final Resource foundResource;
@@ -133,6 +132,9 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
                 foundResource = new UrlResource(resourceUrl);
             }
         }
+
+        LOG.debug("Resource for protocol {} and normalized location pattern {} : {}",
+                protocol, normalizedLocationPattern, foundResource);
 
         return foundResource;
     }
@@ -161,8 +163,6 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         final String normalizedPathPattern = pattern
                 .substring(protocol.length());
 
-        LOG.debug("Find resources for protocol {} and normalized location patter {}", protocol, normalizedPathPattern);
-
         final InternalResolver resolver = getResolverOrNull(protocol);
         final Resource[] foundResources;
 
@@ -183,6 +183,11 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
                     foundResources[i++] = new UrlResource(foundResourceUrl);
                 }
             }
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Resources for protocol {} and normalized location pattern {} : {}",
+                    protocol, normalizedPathPattern, asList(foundResources));
         }
 
         return foundResources;
