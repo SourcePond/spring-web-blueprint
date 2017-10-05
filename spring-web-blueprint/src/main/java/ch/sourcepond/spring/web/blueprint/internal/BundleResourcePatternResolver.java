@@ -83,8 +83,8 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
                                   final InternalResolver bundlespaceResolver) {
         this.bundle = bundle;
         this.patternResolver = patternResolver;
-        accessors.put(CLASSPATH_URL_PREFIX, bundlespaceResolver);
-        accessors.put(CLASSPATHS_URL_PREFIX, bundlespaceResolver);
+        accessors.put(CLASSPATH_URL_PREFIX, classpathResolver);
+        accessors.put(CLASSPATHS_URL_PREFIX, classpathResolver);
         accessors.put(OSGI_BUNDLE_URL_PREFIX, bundlespaceResolver);
         accessors.put(PREFIX_UNSPECIFIED, bundlespaceResolver);
     }
