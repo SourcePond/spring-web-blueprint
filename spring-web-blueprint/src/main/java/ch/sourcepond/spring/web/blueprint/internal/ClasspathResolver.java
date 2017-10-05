@@ -49,7 +49,7 @@ class ClasspathResolver extends InternalResolver<String> {
     @Override
     protected Collection<String> listAllResources(final Bundle bundle) {
         final BundleWiring wiring = bundleWiring(bundle);
-        LOG.debug("Bundle state is {}, wiring is in use: {}", bundle.getState(), wiring.isInUse());
+        LOG.debug("Bundle state of {} is {}, wiring is in use: {}", bundle.getSymbolicName(), bundle.getState(), wiring.isInUse());
         return bundleWiring(bundle).listResources("/", "*", LISTRESOURCES_RECURSE);
     }
 
