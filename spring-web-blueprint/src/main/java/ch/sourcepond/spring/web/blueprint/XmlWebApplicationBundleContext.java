@@ -13,12 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint;
 
+import ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.MessageSource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.web.context.support.XmlWebApplicationContext;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver.create;
+import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
 /**
  *
@@ -30,7 +31,7 @@ public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return create(super.getResourcePatternResolver());
+        return new BundleResourcePatternResolver(getBundle(getServletContext()), super.getResourcePatternResolver());
     }
 
     /**

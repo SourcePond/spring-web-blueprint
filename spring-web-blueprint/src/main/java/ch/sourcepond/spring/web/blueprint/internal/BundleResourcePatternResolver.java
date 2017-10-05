@@ -39,7 +39,6 @@ import static org.slf4j.LoggerFactory.getLogger;
  */
 public class BundleResourcePatternResolver implements ResourcePatternResolver {
     private static final Logger LOG = getLogger(BundleResourcePatternResolver.class);
-    private static final Object MONITOR = new Object();
 
     /**
      * Constant for <em>classpath:</em> URL prefix
@@ -70,8 +69,8 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
     private final ResourcePatternResolver patternResolver;
 
     // Constructor for testing
-    BundleResourcePatternResolver(final Bundle bundle,
-                                  final ResourcePatternResolver patternResolver) {
+    public BundleResourcePatternResolver(final Bundle bundle,
+                                         final ResourcePatternResolver patternResolver) {
         this(bundle, patternResolver, new ClasspathResolver(new AntPathMatcher()),
                 new BundleSpaceResolver(new AntPathMatcher()));
     }
@@ -191,34 +190,5 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
         }
 
         return foundResources;
-    }
-
-    public static void setBundleContext(final BundleContext b) {
-        synchronized (MONITOR) {
-            bundleContext = b;
-            MONITOR.notifyAll();
-        }
-    }
-
-    private static BundleContext getBundleContext() {
-        if (bundleContext == null) {
-            synchronized (MONITOR) {
-                if (bundleContext == null) {
-                    try {
-                        while (bundleContext == null) {
-                            MONITOR.wait();
-                        }
-                    } catch (final InterruptedException e) {
-                        currentThread().interrupt();
-                        throw new IllegalStateException(e.getMessage(), e);
-                    }
-                }
-            }
-        }
-        return bundleContext;
-    }
-
-    public static ResourcePatternResolver create(final ResourcePatternResolver delegate) {
-        return new BundleResourcePatternResolver(getBundleContext().getBundle(), delegate);
     }
 }

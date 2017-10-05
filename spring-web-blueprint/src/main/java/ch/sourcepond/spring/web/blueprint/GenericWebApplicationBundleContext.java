@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint;
 
+import ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.MessageSource;
@@ -21,7 +22,7 @@ import org.springframework.web.context.support.GenericWebApplicationContext;
 
 import javax.servlet.ServletContext;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver.create;
+import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
 /**
  *
@@ -48,7 +49,7 @@ public class GenericWebApplicationBundleContext extends GenericWebApplicationCon
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return create(super.getResourcePatternResolver());
+        return new BundleResourcePatternResolver(getBundle(getServletContext()), super.getResourcePatternResolver());
     }
 
     /**
