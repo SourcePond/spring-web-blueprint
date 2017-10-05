@@ -90,7 +90,7 @@ public final class BlueprintApplicationContext implements WebApplicationContext,
     static final String OSGI_BLUEPRINT_CONTAINER_VERSION = "osgi.blueprint.container.version";
 
     private final Instant startTime = now();
-    private final ResourcePatternResolver resolver = new ServletContextResourcePatternResolver(this);
+    private final ResourcePatternResolver resolver;
     private final ServletContext servletContext;
     private final Environment environment;
     private final BundleContext bundleContext;
@@ -125,6 +125,7 @@ public final class BlueprintApplicationContext implements WebApplicationContext,
                 + OSGI_BLUEPRINT_CONTAINER_VERSION + "="
                 + bundle.getVersion() + "))";
         classLoader = getBundleClassLoader(bundle);
+        resolver = new BundleResourcePatternResolver(bundleContext.getBundle(), new ServletContextResourcePatternResolver(this));
     }
 
     private Bundle getBundle() {
