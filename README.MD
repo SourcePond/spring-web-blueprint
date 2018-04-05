@@ -1,3 +1,5 @@
+[![Maven Central](https://img.shields.io/maven-central/v/ch.sourcepond.spring/spring-web-blueprint.svg)](https://maven-badges.herokuapp.com/maven-central/ch.sourcepond.spring/spring-web-blueprint)
+
 # Quick Overview
 This project enables the usage of the Spring-Web framework on OSGi Blueprint implementations other than Gemini Blueprint.
 The project was initiated because there was no way to integrate the Blueprint-Container with the Spring-Web Application-Context
