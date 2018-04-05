@@ -13,24 +13,33 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint;
 
+import ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.MessageSource;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver.create;
+import javax.servlet.ServletContext;
+import java.io.IOException;
+
+import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
 /**
  *
  */
 public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfigWebApplicationContext {
+    private BundleResourcePatternResolver resolver;
 
     /**
      *
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return create(super.getResourcePatternResolver());
+        if (resolver == null) {
+            resolver = new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        }
+        return resolver;
     }
 
     /**
@@ -42,5 +51,11 @@ public class AnnotationConfigWebApplicationBundleContext extends AnnotationConfi
         } catch (final NoSuchBeanDefinitionException e) {
             return null;
         }
+    }
+
+    @Override
+    public void setServletContext(final ServletContext servletContext) {
+        resolver.setBundle(getBundle(servletContext));
+        super.setServletContext(servletContext);
     }
 }

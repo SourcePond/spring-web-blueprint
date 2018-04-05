@@ -21,12 +21,16 @@ import org.osgi.framework.InvalidSyntaxException;
 import org.slf4j.Logger;
 import org.springframework.web.context.ConfigurableWebApplicationContext;
 
-import javax.servlet.*;
+import javax.servlet.ServletContainerInitializer;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletContextAttributeEvent;
+import javax.servlet.ServletContextAttributeListener;
+import javax.servlet.ServletException;
 import java.util.Set;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver.setBundleContext;
 import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
+import static java.util.Objects.requireNonNull;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -60,6 +64,11 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
     static final String CONTEXT_ATTRIBUTE = "contextAttribute";
     static final String CONFIG_LOCATION_PARAM = "contextConfigLocation";
 
+    static Bundle getBundle(final ServletContext context) {
+        return ((BundleContext) requireNonNull(context.getAttribute(OSGI_BUNDLECONTEXT),
+                () -> OSGI_BUNDLECONTEXT + " is not set as attribute on ServletContext")).getBundle();
+    }
+
     @Override
     public void onStartup(final Set<Class<?>> c, final ServletContext ctx) throws ServletException {
         ctx.addListener(this);
@@ -86,7 +95,6 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
         if (OSGI_BUNDLECONTEXT.equals(event.getName())) {
             final ServletContext sctx = event.getServletContext();
             final BundleContext bundleContext = (BundleContext) event.getValue();
-            setBundleContext(bundleContext);
             final BlueprintApplicationContext blueprintApplicationContext = new BlueprintApplicationContext(sctx, bundleContext);
             try {
                 bundleContext.addServiceListener(blueprintApplicationContext, blueprintApplicationContext.getFilter());
@@ -99,8 +107,8 @@ public class BlueprintServletContainerInitializer implements ServletContainerIni
             currentThread().setContextClassLoader(new ResourceFinderClassLoader(bundleContext));
             try {
                 final ConfigurableWebApplicationContext webContext = createContext(bundleContext.getBundle(), sctx.getInitParameter(BLUEPRINT_CONTEXT_CLASS));
-                webContext.setParent(blueprintApplicationContext);
                 webContext.setServletContext(sctx);
+                webContext.setParent(blueprintApplicationContext);
                 String configLocationParam = sctx.getInitParameter(CONFIG_LOCATION_PARAM);
                 if (configLocationParam != null) {
                     webContext.setConfigLocation(configLocationParam);

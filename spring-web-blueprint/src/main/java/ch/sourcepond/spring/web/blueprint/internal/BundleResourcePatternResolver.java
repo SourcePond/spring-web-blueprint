@@ -14,8 +14,7 @@ limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.osgi.framework.Bundle;
-import org.osgi.framework.BundleContext;
-import org.osgi.framework.wiring.BundleWiring;
+import org.slf4j.Logger;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.ResourcePatternResolver;
@@ -27,13 +26,16 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import static java.lang.Thread.currentThread;
+import static ch.sourcepond.spring.web.blueprint.internal.ResourceFinderClassLoader.getBundleClassLoader;
+import static java.util.Arrays.asList;
+import static java.util.Objects.requireNonNull;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
  */
 public class BundleResourcePatternResolver implements ResourcePatternResolver {
-    private static final Object MONITOR = new Object();
+    private static final Logger LOG = getLogger(BundleResourcePatternResolver.class);
 
     /**
      * Constant for <em>classpath:</em> URL prefix
@@ -58,29 +60,29 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
     static final String PREFIX_UNSPECIFIED = "";
 
     static final char PROTOCOL_SEPARATOR = ':';
-    private static volatile BundleContext bundleContext;
     private final Map<String, InternalResolver> accessors = new HashMap<>();
-    private final Bundle bundle;
     private final ResourcePatternResolver patternResolver;
+    private volatile Bundle bundle;
 
     // Constructor for testing
-    BundleResourcePatternResolver(final Bundle bundle,
-                                  final ResourcePatternResolver patternResolver) {
-        this(bundle, patternResolver, new ClasspathResolver(new AntPathMatcher()),
+    public BundleResourcePatternResolver(final ResourcePatternResolver patternResolver) {
+        this(patternResolver, new ClasspathResolver(new AntPathMatcher()),
                 new BundleSpaceResolver(new AntPathMatcher()));
     }
 
     // Constructor for testing
-    BundleResourcePatternResolver(final Bundle bundle,
-                                  final ResourcePatternResolver patternResolver,
+    BundleResourcePatternResolver(final ResourcePatternResolver patternResolver,
                                   final InternalResolver classpathResolver,
                                   final InternalResolver bundlespaceResolver) {
-        this.bundle = bundle;
         this.patternResolver = patternResolver;
         accessors.put(CLASSPATH_URL_PREFIX, classpathResolver);
         accessors.put(CLASSPATHS_URL_PREFIX, classpathResolver);
         accessors.put(OSGI_BUNDLE_URL_PREFIX, bundlespaceResolver);
         accessors.put(PREFIX_UNSPECIFIED, bundlespaceResolver);
+    }
+
+    public void setBundle(final Bundle bundle) {
+        this.bundle = requireNonNull(bundle, "Bundle cannot be null");
     }
 
     /**
@@ -109,22 +111,26 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
      */
     @Override
     public final Resource getResource(final String path) {
-        final String protocol = extractProtocol(path);
-        final String normalizedLocationPattern = path.substring(protocol
-                .length());
-        final InternalResolver resolver = getResolverOrNull(protocol);
-
-        final Resource foundResource;
-        if (resolver == null) {
-            foundResource = patternResolver.getResource(path);
+        Resource foundResource = null;
+        if (bundle == null) {
+            LOG.warn("No resource determined for {} because no bundle is set", path);
         } else {
-            final URL resourceUrl = resolver.resolveResource(bundle, normalizedLocationPattern);
+            final String protocol = extractProtocol(path);
+            final String normalizedLocationPattern = path.substring(protocol
+                    .length());
+            final InternalResolver resolver = getResolverOrNull(protocol);
 
-            if (resourceUrl == null) {
-                foundResource = null;
+            if (resolver == null) {
+                foundResource = patternResolver.getResource(path);
             } else {
-                foundResource = new UrlResource(resourceUrl);
+                final URL resourceUrl = resolver.resolveResource(bundle, normalizedLocationPattern);
+
+                if (resourceUrl != null) {
+                    foundResource = new UrlResource(resourceUrl);
+                }
             }
+            LOG.debug("Resource for protocol {} and normalized location pattern {} : {}",
+                    protocol, normalizedLocationPattern, foundResource);
         }
 
         return foundResource;
@@ -137,7 +143,11 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
      */
     @Override
     public final ClassLoader getClassLoader() {
-        return bundle.adapt(BundleWiring.class).getClassLoader();
+        if (bundle == null) {
+            LOG.warn("Using system classloader because no bundle is set");
+            return ClassLoader.getSystemClassLoader();
+        }
+        return getBundleClassLoader(bundle);
     }
 
     /*
@@ -150,61 +160,41 @@ public class BundleResourcePatternResolver implements ResourcePatternResolver {
     @Override
     public final Resource[] getResources(final String pattern)
             throws IOException {
-        final String protocol = extractProtocol(pattern);
-        final String normalizedPathPattern = pattern
-                .substring(protocol.length());
-
-        final InternalResolver resolver = getResolverOrNull(protocol);
         final Resource[] foundResources;
-
-        // No resolver found, call delegate pattern resolver
-        if (resolver == null) {
-            foundResources = patternResolver.getResources(pattern);
+        if (bundle == null) {
+            foundResources = new Resource[0];
+            LOG.warn("No resources determined for {} because no bundle is set", pattern);
         } else {
-            final Collection<URL> foundResourceUrls = resolver
-                    .resolveResources(bundle, normalizedPathPattern);
+            final String protocol = extractProtocol(pattern);
+            final String normalizedPathPattern = pattern
+                    .substring(protocol.length());
 
-            if (foundResourceUrls.isEmpty()) {
-                // No result, let delegate pattern resolver try to find matching resources
+            final InternalResolver resolver = getResolverOrNull(protocol);
+
+            // No resolver found, call delegate pattern resolver
+            if (resolver == null) {
                 foundResources = patternResolver.getResources(pattern);
             } else {
-                foundResources = new Resource[foundResourceUrls.size()];
-                int i = 0;
-                for (final URL foundResourceUrl : foundResourceUrls) {
-                    foundResources[i++] = new UrlResource(foundResourceUrl);
-                }
-            }
-        }
+                final Collection<URL> foundResourceUrls = resolver
+                        .resolveResources(bundle, normalizedPathPattern);
 
-        return foundResources;
-    }
-
-    public static void setBundleContext(final BundleContext b) {
-        synchronized (MONITOR) {
-            bundleContext = b;
-            MONITOR.notifyAll();
-        }
-    }
-
-    private static BundleContext getBundleContext() {
-        if (bundleContext == null) {
-            synchronized (MONITOR) {
-                if (bundleContext == null) {
-                    try {
-                        while (bundleContext == null) {
-                            MONITOR.wait();
-                        }
-                    } catch (final InterruptedException e) {
-                        currentThread().interrupt();
-                        throw new IllegalStateException(e.getMessage(), e);
+                if (foundResourceUrls.isEmpty()) {
+                    // No result, let delegate pattern resolver try to find matching resources
+                    foundResources = patternResolver.getResources(pattern);
+                } else {
+                    foundResources = new Resource[foundResourceUrls.size()];
+                    int i = 0;
+                    for (final URL foundResourceUrl : foundResourceUrls) {
+                        foundResources[i++] = new UrlResource(foundResourceUrl);
                     }
                 }
             }
-        }
-        return bundleContext;
-    }
 
-    public static ResourcePatternResolver create(final ResourcePatternResolver delegate) {
-        return new BundleResourcePatternResolver(getBundleContext().getBundle(), delegate);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Resources for protocol {} and normalized location pattern {} : {}",
+                        protocol, normalizedPathPattern, asList(foundResources));
+            }
+        }
+        return foundResources;
     }
 }

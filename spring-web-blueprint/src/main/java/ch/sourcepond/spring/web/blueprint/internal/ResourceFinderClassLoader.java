@@ -22,11 +22,13 @@ import java.net.URL;
 import java.util.*;
 
 import static java.util.Collections.enumeration;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  */
 public class ResourceFinderClassLoader extends ClassLoader {
+    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(ResourceFinderClassLoader.class);
     private final BundleContext context;
 
     public ResourceFinderClassLoader(final BundleContext context) {
@@ -52,4 +54,20 @@ public class ResourceFinderClassLoader extends ClassLoader {
         }
         return enumeration(resources);
     }
+
+  @Override
+  protected URL findResource(String name){
+    for (final Bundle b : context.getBundles()) {
+        final ClassLoader cl = getBundleClassLoader(b);
+        if (cl != null) {
+            URL url = cl.getResource(name);
+            if(url != null){
+                return url;
+            }
+        }
+    }
+    return null;
+  }
+    
+    
 }

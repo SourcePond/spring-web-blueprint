@@ -10,7 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ch.sourcepond.spring</groupId>
     <artifactId>spring-web-blueprint-parent</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.4-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <modules>
@@ -21,6 +21,9 @@
     <properties>
         <spring>4.3.5.RELEASE_1</spring>
         <javax.servlet>3.1.0</javax.servlet>
+
+        <spring.version.range>[4.3.0,6.0.0)</spring.version.range>
+        <javax.servlet.version.range>[3.1.0,5.0.0)</javax.servlet.version.range>
     </properties>
 
     <dependencyManagement>

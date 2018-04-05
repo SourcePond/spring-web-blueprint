@@ -14,6 +14,8 @@ limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint.internal;
 
 import org.osgi.framework.Bundle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.PathMatcher;
 
 import java.io.IOException;
@@ -21,10 +23,13 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.LinkedList;
 
+import static org.slf4j.LoggerFactory.getLogger;
+
 /**
  *
  */
 abstract class InternalResolver<T> {
+    private static final Logger LOG = getLogger(InternalResolver.class);
     private final PathMatcher matcher;
 
     InternalResolver(final PathMatcher matcher) {
@@ -60,6 +65,10 @@ abstract class InternalResolver<T> {
         final Collection<URL> foundResources = new LinkedList<>();
         final Collection<T> resourcePaths = listAllResources(bundle);
 
+        LOG.debug("Following resources listed for {} before filtering: {}",
+                bundle.getSymbolicName(),
+                resourcePaths);
+
         if (resourcePaths != null && !resourcePaths.isEmpty()) {
             for (final T resourcePath : resourcePaths) {
                 // Check whether we need to resolve and include the current path
@@ -67,6 +76,9 @@ abstract class InternalResolver<T> {
                 final String resourcePathAsString = toPath(resourcePath, pattern);
                 if (matcher.match(pattern, resourcePathAsString) && !resourcePathAsString.endsWith("/")) {
                     foundResources.add(resolveResource(bundle, resourcePathAsString));
+                } else if (LOG.isDebugEnabled()) {
+                    LOG.debug("Ignored {} from {} because it does not match pattern {}",
+                            resourcePathAsString, bundle.getSymbolicName(), pattern);
                 }
             }
         }

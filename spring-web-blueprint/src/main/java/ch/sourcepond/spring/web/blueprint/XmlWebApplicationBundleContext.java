@@ -13,24 +13,31 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 package ch.sourcepond.spring.web.blueprint;
 
+import ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.MessageSource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.web.context.support.XmlWebApplicationContext;
 
-import static ch.sourcepond.spring.web.blueprint.internal.BundleResourcePatternResolver.create;
+import javax.servlet.ServletContext;
+
+import static ch.sourcepond.spring.web.blueprint.BlueprintServletContainerInitializer.getBundle;
 
 /**
  *
  */
 public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
+    private BundleResourcePatternResolver resolver;
 
     /**
      *
      */
     @Override
     protected ResourcePatternResolver getResourcePatternResolver() {
-        return create(super.getResourcePatternResolver());
+        if (resolver == null) {
+            resolver = new BundleResourcePatternResolver(super.getResourcePatternResolver());
+        }
+        return resolver;
     }
 
     /**
@@ -42,5 +49,11 @@ public class XmlWebApplicationBundleContext extends XmlWebApplicationContext {
         } catch (final NoSuchBeanDefinitionException e) {
             return null;
         }
+    }
+
+    @Override
+    public void setServletContext(final ServletContext servletContext) {
+        resolver.setBundle(getBundle(servletContext));
+        super.setServletContext(servletContext);
     }
 }
